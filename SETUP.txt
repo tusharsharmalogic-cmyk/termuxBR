@@ -1,0 +1,44 @@
+================================================================
+    TERMUX STORAGE MANAGER — SETUP GUIDE
+================================================================
+
+STEP 1 — Files Copy Karo
+================================================================
+Ye dono files/folders Termux ke home mein copy karo:
+
+  ~/storage_manager/
+  ├── app.py
+  └── templates/
+      └── index.html
+
+Agar sdcard se copy kar rahe ho:
+  mkdir -p ~/storage_manager/templates
+  cp /sdcard/app.py ~/storage_manager/
+  cp /sdcard/index.html ~/storage_manager/templates/
+
+STEP 2 — Flask Install Karo (agar nahi hai)
+================================================================
+  pip install flask
+
+STEP 3 — Run Karo
+================================================================
+  cd ~/storage_manager
+  python app.py
+
+STEP 4 — Browser Mein Kholo
+================================================================
+  http://localhost:5000
+  ya
+  http://127.0.0.1:5000
+
+FEATURES:
+  📊 Overview  — Total storage, disk usage bar
+  🏠 Home      — Home folder files/folders, delete button
+  📦 Packages  — Large apt packages, uninstall button
+  🐍 Pip       — Python packages list, uninstall button
+  🧹 Cleanup   — APT cache, pip cache, pycache clean
+  💾 Backup    — Full backup / Scripts backup + restore .txt
+
+================================================================
+        Happy Cleaning! 🔥
+================================================================

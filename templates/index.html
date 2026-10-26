@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Termux Storage Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #0a0c0f;
+    --bg2:      #111418;
+    --bg3:      #181d24;
+    --border:   #1e2530;
+    --accent:   #00ff88;
+    --accent2:  #00c8ff;
+    --accent3:  #ff6b35;
+    --accent4:  #ffcc00;
+    --text:     #e2e8f0;
+    --muted:    #5a6a7e;
+    --danger:   #ff4757;
+    --success:  #00ff88;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Space Grotesk', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* HEADER */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+  header span { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 12px 18px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* CONTENT */
+  .content { padding: 20px; max-width: 900px; margin: 0 auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* CARDS */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::before {
+    content: '';
+    width: 3px; height: 14px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  /* STORAGE BARS */
+  .storage-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 500px) { .storage-grid { grid-template-columns: 1fr; } }
+
+  .stat-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-value { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+  .stat-value.green  { color: var(--accent); }
+  .stat-value.blue   { color: var(--accent2); }
+  .stat-value.orange { color: var(--accent3); }
+  .stat-value.yellow { color: var(--accent4); }
+
+  .bar-wrap {
+    background: var(--bg3);
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.8s ease;
+  }
+
+  /* LIST ITEMS */
+  .list-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    gap: 10px;
+    transition: border-color 0.2s;
+  }
+  .list-item:hover { border-color: var(--muted); }
+  .list-item .name {
+    flex: 1;
+    font-family: var(--mono);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .list-item .size {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent4);
+    min-width: 70px;
+    text-align: right;
+  }
+
+  /* SIZE BAR INLINE */
+  .size-bar {
+    width: 60px; height: 4px;
+    background: var(--bg);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .size-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 2px;
+  }
+
+  /* BUTTONS */
+  .btn {
+    padding: 8px 14px;
+    border-radius: 7px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-danger  { background: rgba(255,71,87,0.15);  color: var(--danger);  border: 1px solid rgba(255,71,87,0.3); }
+  .btn-danger:hover  { background: rgba(255,71,87,0.25); }
+  .btn-success { background: rgba(0,255,136,0.12); color: var(--accent);  border: 1px solid rgba(0,255,136,0.25); }
+  .btn-success:hover { background: rgba(0,255,136,0.22); }
+  .btn-blue    { background: rgba(0,200,255,0.12); color: var(--accent2); border: 1px solid rgba(0,200,255,0.25); }
+  .btn-blue:hover    { background: rgba(0,200,255,0.22); }
+  .btn-orange  { background: rgba(255,107,53,0.12); color: var(--accent3); border: 1px solid rgba(255,107,53,0.25); }
+  .btn-orange:hover  { background: rgba(255,107,53,0.22); }
+  .btn-big {
+    width: 100%; padding: 14px;
+    font-size: 13px; font-weight: 700;
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+
+  /* TOAST */
+  #toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    max-width: 320px;
+    text-align: center;
+    z-index: 999;
+    transition: transform 0.3s ease;
+    word-break: break-word;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--accent);  color: var(--accent); }
+  #toast.error   { border-color: var(--danger);  color: var(--danger); }
+  #toast.info    { border-color: var(--accent2); color: var(--accent2); }
+
+  /* MODAL */
+  .modal-bg {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 420px;
+    width: 100%;
+  }
+  .modal h3 { font-size: 15px; margin-bottom: 10px; }
+  .modal p  { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+  .modal .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* LOADING */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+
+  /* SECTION DIVIDER */
+  .section-gap { margin-bottom: 24px; }
+
+  /* BACKUP SECTION */
+  .backup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 500px) { .backup-grid { grid-template-columns: 1fr; } }
+
+  .backup-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .backup-card h3 { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .backup-card p  { font-size: 11px; color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
+
+  /* REFRESH BTN */
+  .refresh-btn {
+    background: none; border: none;
+    color: var(--muted); cursor: pointer;
+    font-size: 14px; padding: 4px;
+    margin-left: auto;
+    transition: color 0.2s;
+  }
+  .refresh-btn:hover { color: var(--accent); }
+
+  /* SEARCH */
+  .search-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    width: 100%;
+    margin-bottom: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus { border-color: var(--accent); }
+
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 30px; }
+
+  /* OUTPUT BOX */
+  .output-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 10px;
+    display: none;
+  }
+  .output-box.show { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚡</div>
+  <h1>Termux Storage Manager</h1>
+  <span id="headerTime">--</span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">📊 Overview</div>
+  <div class="tab" onclick="switchTab('home')">🏠 Home</div>
+  <div class="tab" onclick="switchTab('packages')">📦 Packages</div>
+  <div class="tab" onclick="switchTab('pip')">🐍 Pip</div>
+  <div class="tab" onclick="switchTab('cleanup')">🧹 Cleanup</div>
+  <div class="tab" onclick="switchTab('backup')">💾 Backup</div>
+</div>
+
+<div class="content">
+
+  <!-- ── OVERVIEW ── -->
+  <div class="page active" id="page-overview">
+    <div class="card section-gap">
+      <div class="card-title">
+        Storage Overview
+        <button class="refresh-btn" onclick="loadOverview()">↻</button>
+      </div>
+      <div class="storage-grid" id="overviewGrid">
+        <div class="loading-text" style="grid-column:1/-1"><span class="spinner"></span> Loading...</div>
+      </div>
+      <div style="margin-top:4px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px">
+          <span>Termux Usage</span>
+          <span id="usagePercent">--</span>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" id="usageBar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Quick Actions</div>
+      <button class="btn btn-success btn-big" onclick="switchTab('cleanup')">🧹 Run Cleanup</button>
+      <button class="btn btn-blue btn-big"    onclick="switchTab('backup')">💾 Take Backup</button>
+      <button class="btn btn-orange btn-big"  onclick="switchTab('packages')">📦 Manage Packages</button>
+    </div>
+  </div>
+
+  <!-- ── HOME ── -->
+  <div class="page" id="page-home">
+    <div class="card">
+      <div class="card-title">
+        Home Folder Contents
+        <button class="refresh-btn" onclick="loadHome()">↻</button>
+      </div>
+      <input class="search-box" type="text" placeholder="Search files/folders..." id="homeSearch" oninput="filterHome()"/>
+      <div id="homeList"><div class="loading-text"><span class="spinner"></span> Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- ── PACKAGES ── -->
+  <div class="page" id="page-packages">
+    <div class="card">
+      <div class="card-title">
+        Large Packages (>1MB)
+        <button class="refresh-btn" onclick="loadPackages()">↻</button>
+      </div>
+      <input class="search-box" type="text" placeholder="Search packages..." id="pkgSearch" oninput="filterPkgs()"/>
+      <div id="pkgList"><div class="loading-text"><span class="spinner"></span> Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- ── PIP ── -->
+  <div class="page" id="page-pip">
+    <div class="card">
+      <div class="card-title">
+        Python Packages
+        <button class="refresh-btn" onclick="loadPip()">↻</button>
+      </div>
+      <input class="search-box" type="text" placeholder="Search pip packages..." id="pipSearch" oninput="filterPip()"/>
+      <div id="pipList"><div class="loading-text"><span class="spinner"></span> Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- ── CLEANUP ── -->
+  <div class="page" id="page-cleanup">
+    <div class="card">
+      <div class="card-title">Cleanup Tools</div>
+
+      <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <div style="display:flex;align-items:center;width:100%;gap:10px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">APT Cache Clean</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Downloaded package cache saaf karo</div>
+          </div>
+          <button class="btn btn-danger" onclick="runCleanup('apt')">Clean</button>
+        </div>
+        <div class="output-box" id="out-apt"></div>
+      </div>
+
+      <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <div style="display:flex;align-items:center;width:100%;gap:10px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">Pip Cache Purge</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Python pip ka downloaded cache clear karo</div>
+          </div>
+          <button class="btn btn-danger" onclick="runCleanup('pip')">Clean</button>
+        </div>
+        <div class="output-box" id="out-pip"></div>
+      </div>
+
+      <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <div style="display:flex;align-items:center;width:100%;gap:10px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">Python Cache (__pycache__)</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Compiled .pyc files delete karo</div>
+          </div>
+          <button class="btn btn-danger" onclick="runCleanup('pycache')">Clean</button>
+        </div>
+        <div class="output-box" id="out-pycache"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BACKUP ── -->
+  <div class="page" id="page-backup">
+    <div class="card section-gap">
+      <div class="card-title">Backup Options</div>
+      <div class="backup-grid">
+
+        <div class="backup-card">
+          <h3>🗄️ Full Environment</h3>
+          <p>Saare packages + home folder ka complete backup. Naye phone pe restore karne ke liye.</p>
+          <button class="btn btn-success" style="width:100%" onclick="takeBackup('full')">Backup Now</button>
+        </div>
+
+        <div class="backup-card">
+          <h3>📜 Scripts Only</h3>
+          <p>Sirf teri scripts, bin folder aur config files. Chhota aur fast backup.</p>
+          <button class="btn btn-blue" style="width:100%" onclick="takeBackup('scripts')">Backup Now</button>
+        </div>
+
+      </div>
+      <div class="output-box show" id="backupOutput" style="color:var(--muted)">Backup lene ke baad yahan result dikhega...\nBackup file /sdcard/ mein save hogi.\nRestore guide bhi saath mein .txt file mein milegi.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Restore Instructions</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.9;font-family:var(--mono)">
+        <div style="color:var(--accent);margin-bottom:8px"># Full Restore Command:</div>
+        <div style="background:var(--bg3);padding:10px;border-radius:6px;margin-bottom:14px;word-break:break-all">
+          tar -xzf /sdcard/termux-full-backup-*.tar.gz -C /data/data/com.termux/files --recursive-unlink --preserve-permissions
+        </div>
+        <div style="color:var(--accent2);margin-bottom:8px"># Scripts Restore Command:</div>
+        <div style="background:var(--bg3);padding:10px;border-radius:6px;word-break:break-all">
+          tar -xzf /sdcard/termux-scripts-backup-*.tar.gz -C ~ --recursive-unlink --preserve-permissions
+        </div>
+        <div style="margin-top:14px;color:var(--muted);font-size:11px">
+          ⚠️ Restore ke baad Termux restart karna zaroori hai.<br>
+          📄 Detailed guide backup ke saath .txt file mein milegi.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<!-- CONFIRM MODAL -->
+<div class="modal-bg" id="confirmModal">
+  <div class="modal">
+    <h3 id="modalTitle">Confirm Delete</h3>
+    <p id="modalMsg">Are you sure?</p>
+    <div class="modal-btns">
+      <button class="btn btn-blue"   onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="modalConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────
+let homeData    = [];
+let pkgData     = [];
+let pipData     = [];
+let modalAction = null;
+
+// ── UTILS ─────────────────────────────────────────────────────────
+function fmtSize(bytes) {
+  if (bytes >= 1073741824) return (bytes/1073741824).toFixed(1)+' GB';
+  if (bytes >= 1048576)    return (bytes/1048576).toFixed(1)+' MB';
+  if (bytes >= 1024)       return (bytes/1024).toFixed(0)+' KB';
+  return bytes+' B';
+}
+
+function toast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.className = `show ${type}`;
+  t.textContent = msg;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = '', 3000);
+}
+
+function showModal(title, msg, onConfirm) {
+  document.getElementById('modalTitle').textContent  = title;
+  document.getElementById('modalMsg').textContent    = msg;
+  document.getElementById('confirmModal').classList.add('show');
+  modalAction = onConfirm;
+  document.getElementById('modalConfirmBtn').onclick = () => { closeModal(); onConfirm(); };
+}
+
+function closeModal() {
+  document.getElementById('confirmModal').classList.remove('show');
+}
+
+// ── TABS ──────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['overview','home','packages','pip','cleanup','backup'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+
+  if (name === 'overview' && !document.getElementById('overviewGrid').dataset.loaded) loadOverview();
+  if (name === 'home'     && homeData.length === 0)    loadHome();
+  if (name === 'packages' && pkgData.length === 0)     loadPackages();
+  if (name === 'pip'      && pipData.length === 0)     loadPip();
+}
+
+// ── OVERVIEW ──────────────────────────────────────────────────────
+async function loadOverview() {
+  document.getElementById('overviewGrid').innerHTML =
+    '<div class="loading-text" style="grid-column:1/-1"><span class="spinner"></span> Loading...</div>';
+  const r = await fetch('/api/storage/overview').then(r=>r.json());
+  const pct = r.total_termux && r.disk_total
+    ? Math.min(100, Math.round((r.total_termux / (parseSize(r.disk_total))) * 100))
+    : 0;
+
+  document.getElementById('overviewGrid').dataset.loaded = '1';
+  document.getElementById('overviewGrid').innerHTML = `
+    <div class="stat-box">
+      <div class="stat-label">Termux Total</div>
+      <div class="stat-value green">${fmtSize(r.total_termux)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Home Folder</div>
+      <div class="stat-value blue">${fmtSize(r.home)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Packages (usr)</div>
+      <div class="stat-value orange">${fmtSize(r.usr)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Disk Free</div>
+      <div class="stat-value yellow">${r.disk_avail}</div>
+    </div>
+  `;
+  document.getElementById('usagePercent').textContent = r.disk_percent || '--';
+  const barW = parseInt(r.disk_percent) || 0;
+  document.getElementById('usageBar').style.width = barW+'%';
+  document.getElementById('usageBar').style.background =
+    barW > 80 ? 'linear-gradient(90deg,#ff4757,#ff6b35)'
+    : barW > 60 ? 'linear-gradient(90deg,#ffcc00,#ff6b35)'
+    : 'linear-gradient(90deg,var(--accent),var(--accent2))';
+}
+
+function parseSize(s) {
+  if (!s) return 1;
+  const n = parseFloat(s);
+  if (s.endsWith('G')) return n*1073741824;
+  if (s.endsWith('M')) return n*1048576;
+  if (s.endsWith('K')) return n*1024;
+  return n;
+}
+
+// ── HOME ──────────────────────────────────────────────────────────
+async function loadHome() {
+  document.getElementById('homeList').innerHTML =
+    '<div class="loading-text"><span class="spinner"></span> Loading...</div>';
+  homeData = await fetch('/api/storage/home_breakdown').then(r=>r.json());
+  renderHome(homeData);
+}
+
+function renderHome(data) {
+  if (!data.length) { document.getElementById('homeList').innerHTML = '<div class="empty">Kuch nahi mila</div>'; return; }
+  const max = data[0].size;
+  document.getElementById('homeList').innerHTML = data.map(item => `
+    <div class="list-item">
+      <div class="name" title="${item.path}">${item.name}</div>
+      <div class="size-bar"><div class="size-bar-fill" style="width:${Math.round(item.size/max*100)}%"></div></div>
+      <div class="size">${fmtSize(item.size)}</div>
+      <button class="btn btn-danger" style="padding:6px 10px;font-size:11px"
+        onclick="confirmDelete('${item.path}','${item.name}')">Del</button>
+    </div>
+  `).join('');
+}
+
+function filterHome() {
+  const q = document.getElementById('homeSearch').value.toLowerCase();
+  renderHome(homeData.filter(i => i.name.toLowerCase().includes(q)));
+}
+
+function confirmDelete(path, name) {
+  showModal('Delete Karo?', `"${name}" permanently delete ho jayega!`, async () => {
+    const r = await fetch('/api/cleanup/delete_path', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({path})
+    }).then(r=>r.json());
+    if (r.success) {
+      toast('Deleted: '+name, 'success');
+      loadHome();
+      loadOverview();
+    } else {
+      toast(r.message, 'error');
+    }
+  });
+}
+
+// ── PACKAGES ──────────────────────────────────────────────────────
+async function loadPackages() {
+  document.getElementById('pkgList').innerHTML =
+    '<div class="loading-text"><span class="spinner"></span> Loading...</div>';
+  pkgData = await fetch('/api/packages/large').then(r=>r.json());
+  renderPkgs(pkgData);
+}
+
+function renderPkgs(data) {
+  if (!data.length) { document.getElementById('pkgList').innerHTML = '<div class="empty">Koi bada package nahi mila</div>'; return; }
+  const max = data[0].size;
+  document.getElementById('pkgList').innerHTML = data.map(pkg => `
+    <div class="list-item">
+      <div class="name">${pkg.name}</div>
+      <div class="size-bar"><div class="size-bar-fill" style="width:${Math.round(pkg.size/max*100)}%"></div></div>
+      <div class="size">${fmtSize(pkg.size)}</div>
+      <button class="btn btn-danger" style="padding:6px 10px;font-size:11px"
+        onclick="confirmPkgDelete('${pkg.name}')">Del</button>
+    </div>
+  `).join('');
+}
+
+function filterPkgs() {
+  const q = document.getElementById('pkgSearch').value.toLowerCase();
+  renderPkgs(pkgData.filter(p => p.name.toLowerCase().includes(q)));
+}
+
+function confirmPkgDelete(name) {
+  showModal('Package Delete?', `"${name}" uninstall ho jayega. Dependencies toot sakti hain!`, async () => {
+    toast('Uninstalling '+name+'...', 'info');
+    const r = await fetch('/api/packages/delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({package: name})
+    }).then(r=>r.json());
+    toast(r.success ? name+' removed!' : r.message, r.success ? 'success' : 'error');
+    if (r.success) loadPackages();
+  });
+}
+
+// ── PIP ──────────────────────────────────────────────────────────
+async function loadPip() {
+  document.getElementById('pipList').innerHTML =
+    '<div class="loading-text"><span class="spinner"></span> Loading...</div>';
+  pipData = await fetch('/api/pip/list').then(r=>r.json());
+  renderPip(pipData);
+}
+
+function renderPip(data) {
+  if (!data.length) { document.getElementById('pipList').innerHTML = '<div class="empty">Koi pip package nahi mila</div>'; return; }
+  const max = Math.max(...data.map(p=>p.size), 1);
+  document.getElementById('pipList').innerHTML = data.map(pkg => `
+    <div class="list-item">
+      <div class="name">${pkg.name} <span style="color:var(--muted);font-size:10px">v${pkg.version}</span></div>
+      <div class="size-bar"><div class="size-bar-fill" style="width:${Math.round(pkg.size/max*100)}%"></div></div>
+      <div class="size">${pkg.size ? fmtSize(pkg.size) : '—'}</div>
+      <button class="btn btn-danger" style="padding:6px 10px;font-size:11px"
+        onclick="confirmPipDelete('${pkg.name}')">Del</button>
+    </div>
+  `).join('');
+}
+
+function filterPip() {
+  const q = document.getElementById('pipSearch').value.toLowerCase();
+  renderPip(pipData.filter(p => p.name.toLowerCase().includes(q)));
+}
+
+function confirmPipDelete(name) {
+  showModal('Pip Package Delete?', `"${name}" uninstall hoga. Dependent scripts toot sakti hain!`, async () => {
+    toast('Uninstalling '+name+'...', 'info');
+    const r = await fetch('/api/pip/uninstall', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({package: name})
+    }).then(r=>r.json());
+    toast(r.success ? name+' removed!' : r.message, r.success ? 'success' : 'error');
+    if (r.success) loadPip();
+  });
+}
+
+// ── CLEANUP ──────────────────────────────────────────────────────
+async function runCleanup(type) {
+  const outId = 'out-'+type;
+  const box   = document.getElementById(outId);
+  box.className = 'output-box show';
+  box.textContent = '⏳ Running...';
+
+  let url = '';
+  if (type === 'apt')     url = '/api/cleanup/apt';
+  if (type === 'pip')     url = '/api/pip/cache_purge';
+  if (type === 'pycache') url = '/api/cleanup/pycache';
+
+  const r = await fetch(url, {method:'POST'}).then(r=>r.json());
+  box.textContent = r.message || (r.success ? 'Done!' : 'Error');
+  toast(r.success ? 'Cleanup done!' : 'Error occurred', r.success ? 'success' : 'error');
+  if (r.success) loadOverview();
+}
+
+// ── BACKUP ───────────────────────────────────────────────────────
+async function takeBackup(type) {
+  const box = document.getElementById('backupOutput');
+  box.className = 'output-box show';
+  box.style.color = 'var(--accent4)';
+  box.textContent = '⏳ Backup chal raha hai... thoda wait karo (2-5 min lag sakte hain)';
+  toast('Backup shuru ho gaya...', 'info');
+
+  const url = type === 'full' ? '/api/backup/full' : '/api/backup/scripts';
+  const r   = await fetch(url, {method:'POST'}).then(r=>r.json());
+  box.style.color = r.success ? 'var(--accent)' : 'var(--danger)';
+  box.textContent = r.message;
+  toast(r.success ? '✅ Backup complete!' : '❌ Backup failed', r.success ? 'success' : 'error');
+}
+
+// ── CLOCK ────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('headerTime').textContent =
+    now.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+}
+updateClock();
+setInterval(updateClock, 30000);
+
+// ── INIT ─────────────────────────────────────────────────────────
+loadOverview();
+</script>
+</body>
+</html>
